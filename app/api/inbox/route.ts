@@ -13,7 +13,8 @@ export async function GET() {
           snippet: email.snippet
         });
 
-        if (!analysis.isBrandDeal) return null;
+        // Keep only relevant brand emails; drop promos/spam.
+        if (!analysis.isBrandDeal || analysis.intent === "spam") return null;
 
         const suggestedReply = await suggestReplyForEmail({
           subject: email.subject,

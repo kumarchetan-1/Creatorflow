@@ -1,21 +1,17 @@
-import { getSupabase } from "@/lib/supabase";
+import { getSupabaseAuthed } from "@/lib/supabase";
 import type { ActionResult, ParsedIntent } from "@/types/domain";
 
-function getUserId() {
-  return process.env.DEMO_USER_ID || null;
-}
-
 async function logActivity(actionType: string, summary: string) {
-  const supabase = getSupabase();
+  const { supabase, user } = await getSupabaseAuthed();
   await supabase.from("activities").insert({
-    user_id: getUserId(),
+    user_id: user.id,
     action_type: actionType,
     summary
   });
 }
 
 export async function executeIntent(parsed: ParsedIntent): Promise<ActionResult> {
-  const supabase = getSupabase();
+  const { supabase, user } = await getSupabaseAuthed();
 
   if (parsed.intent === "create_contact") {
     const brandName = parsed.entities.brandName;
@@ -26,7 +22,7 @@ export async function executeIntent(parsed: ParsedIntent): Promise<ActionResult>
     const { data, error } = await supabase
       .from("contacts")
       .insert({
-        user_id: getUserId(),
+        user_id: user.id,
         name: brandName
       })
       .select("id,name")
@@ -46,7 +42,7 @@ export async function executeIntent(parsed: ParsedIntent): Promise<ActionResult>
     const { data, error } = await supabase
       .from("deals")
       .insert({
-        user_id: getUserId(),
+        user_id: user.id,
         title: dealName,
         amount: parsed.entities.amount ?? 0,
         status: parsed.entities.status ?? "lead",
@@ -71,7 +67,7 @@ export async function executeIntent(parsed: ParsedIntent): Promise<ActionResult>
     const { data, error } = await supabase
       .from("tasks")
       .insert({
-        user_id: getUserId(),
+        user_id: user.id,
         title: note,
         due_date: dueDate,
         status: "open"
@@ -86,11 +82,12 @@ export async function executeIntent(parsed: ParsedIntent): Promise<ActionResult>
 
   if (parsed.intent === "query_insights") {
     const [contactsRes, dealsRes, openTasksRes] = await Promise.all([
-      supabase.from("contacts").select("*", { count: "exact", head: true }),
-      supabase.from("deals").select("amount,status"),
+      supabase.from("contacts").select("*", { count: "exact", head: true }).eq("user_id", user.id),
+      supabase.from("deals").select("amount,status").eq("user_id", user.id),
       supabase
         .from("tasks")
         .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
         .eq("status", "open")
     ]);
 

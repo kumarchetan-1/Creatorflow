@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
-import { getSupabase } from "@/lib/supabase";
+import { createSupabaseServerClient } from "@/lib/supabase/auth-server";
 
 export async function GET() {
   try {
-    const supabase = getSupabase();
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { data, error } = await supabase
       .from("contacts")
-      .select("id,name,email,created_at")
+      .select("id,name,type,created_at")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20);
 

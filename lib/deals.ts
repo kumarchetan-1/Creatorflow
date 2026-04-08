@@ -7,8 +7,11 @@ type DealResult = {
   amount: number;
 };
 
-export async function createDeal(name: string, amount: number): Promise<DealResult> {
+export async function createDeal(userId: string, name: string, amount: number): Promise<DealResult> {
   const { displayName, searchName } = normalizeContactName(name);
+  if (!userId) {
+    throw new Error("Missing userId.");
+  }
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Amount must be a positive number.");
   }
@@ -16,6 +19,7 @@ export async function createDeal(name: string, amount: number): Promise<DealResu
   const { data: existingContact, error: contactLookupError } = await supabase
     .from("contacts")
     .select("id")
+    .eq("user_id", userId)
     .ilike("name", searchName)
     .limit(1)
     .maybeSingle();
@@ -27,11 +31,12 @@ export async function createDeal(name: string, amount: number): Promise<DealResu
   let contactId = existingContact?.id;
 
   if (!contactId) {
-    const createdContact = await createContact(displayName, "brand");
+    const createdContact = await createContact(userId, displayName, "brand");
     contactId = createdContact.id;
   }
 
   let { error: dealInsertError } = await supabase.from("deals").insert({
+    user_id: userId,
     contact_id: contactId,
     title: `${displayName} deal`,
     amount,
@@ -41,6 +46,7 @@ export async function createDeal(name: string, amount: number): Promise<DealResu
   // Support existing DBs where deals table does not include "title".
   if (dealInsertError?.message.includes("'title' column")) {
     const retry = await supabase.from("deals").insert({
+      user_id: userId,
       contact_id: contactId,
       amount,
       status: "closed"

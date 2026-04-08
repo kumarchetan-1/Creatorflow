@@ -1,14 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/auth-server";
 
-export function getSupabase() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error("Missing Supabase environment variables.");
+export async function getSupabaseAuthed() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error("Unauthorized");
   }
-
-  return createClient(supabaseUrl, supabaseServiceRoleKey, {
-    auth: { persistSession: false }
-  });
+  return { supabase, user };
 }

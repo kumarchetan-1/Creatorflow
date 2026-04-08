@@ -39,7 +39,8 @@ type AllDealsResult = {
 
 type QueryResult = LastDealResult | TopBrandResult | AllDealsResult;
 
-export async function handleQuery(entities: QueryEntities): Promise<QueryResult> {
+export async function handleQuery(userId: string, entities: QueryEntities): Promise<QueryResult> {
+  if (!userId) throw new Error("Missing userId.");
   const type = entities.type?.trim();
 
   if (type === "last_deal") {
@@ -51,6 +52,7 @@ export async function handleQuery(entities: QueryEntities): Promise<QueryResult>
     const { data: contact, error: contactError } = await supabase
       .from("contacts")
       .select("id,name")
+      .eq("user_id", userId)
       .ilike("name", name)
       .limit(1)
       .maybeSingle();
@@ -63,6 +65,7 @@ export async function handleQuery(entities: QueryEntities): Promise<QueryResult>
     const { data: deal, error: dealError } = await supabase
       .from("deals")
       .select("id,amount,status,created_at")
+      .eq("user_id", userId)
       .eq("contact_id", contact.id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -88,6 +91,7 @@ export async function handleQuery(entities: QueryEntities): Promise<QueryResult>
     const { data: deals, error: dealsError } = await supabase
       .from("deals")
       .select("contact_id,amount")
+      .eq("user_id", userId)
       .not("contact_id", "is", null);
 
     if (dealsError) throw new Error(dealsError.message);
@@ -115,6 +119,7 @@ export async function handleQuery(entities: QueryEntities): Promise<QueryResult>
     const { data: contact, error: contactError } = await supabase
       .from("contacts")
       .select("id,name")
+      .eq("user_id", userId)
       .eq("id", topContactId)
       .single();
 
@@ -134,6 +139,7 @@ export async function handleQuery(entities: QueryEntities): Promise<QueryResult>
     const { data, error } = await supabase
       .from("deals")
       .select("id,contact_id,amount,status,created_at,contacts(name)")
+      .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
     if (error) throw new Error(error.message);

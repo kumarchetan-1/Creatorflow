@@ -9,11 +9,16 @@ type ContactRecord = {
 };
 
 export async function createContact(
+  userId: string,
   name: string,
   type: string
 ): Promise<ContactRecord> {
   const { displayName, searchName } = normalizeContactName(name);
   const trimmedType = type.trim();
+
+  if (!userId) {
+    throw new Error("Missing userId.");
+  }
 
   if (!trimmedType) {
     throw new Error("Both name and type are required.");
@@ -22,6 +27,7 @@ export async function createContact(
   const { data: existing, error: existingError } = await supabase
     .from("contacts")
     .select("id,name,type,created_at")
+    .eq("user_id", userId)
     .ilike("name", searchName)
     .limit(1)
     .maybeSingle();
@@ -36,7 +42,7 @@ export async function createContact(
 
   const { data, error } = await supabase
     .from("contacts")
-    .insert({ name: displayName, type: trimmedType.toLowerCase() })
+    .insert({ user_id: userId, name: displayName, type: trimmedType.toLowerCase() })
     .select("id,name,type,created_at")
     .single();
 

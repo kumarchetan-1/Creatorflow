@@ -2,6 +2,137 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes cf-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes cf-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 body {
-  @apply bg-zinc-950 text-zinc-100 antialiased;
+  background: #0b0b0c;
+  color: #ededed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  .cf-card {
+    @apply rounded-[18px] border p-4 shadow-[0_1px_0_rgba(255,255,255,0.03),0_12px_30px_rgba(0,0,0,0.35)];
+    background: #111113;
+    border-color: #1c1c1f;
+  }
+
+  .cf-panel {
+    @apply rounded-[18px] border shadow-[0_1px_0_rgba(255,255,255,0.03)];
+    background: #111113;
+    border-color: #1c1c1f;
+  }
+
+  .cf-muted {
+    color: #9ca3af;
+  }
+
+  .cf-link {
+    @apply underline underline-offset-4 transition-colors;
+    color: #9ca3af;
+  }
+  .cf-link:hover {
+    color: #ededed;
+  }
+
+  .cf-button {
+    @apply inline-flex items-center justify-center rounded-[16px] border px-3 py-2 text-sm font-medium transition-all duration-200 disabled:opacity-50;
+    background: #111113;
+    border-color: #1c1c1f;
+    color: #ededed;
+  }
+  .cf-button:hover {
+    background: #151518;
+  }
+
+  .cf-button-primary {
+    @apply inline-flex items-center justify-center rounded-[16px] border px-3 py-2 text-sm font-medium transition-all duration-200 disabled:opacity-50;
+    background: #ffffff;
+    border-color: #1c1c1f;
+    color: #0b0b0c;
+  }
+  .cf-button-primary:hover {
+    background: #f2f2f2;
+  }
+
+  .cf-input {
+    @apply w-full rounded-[16px] border px-3 py-2 text-sm outline-none transition-all duration-200;
+    background: #0b0b0c;
+    border-color: #1c1c1f;
+    color: #ededed;
+  }
+  .cf-input:focus {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.24),
+      0 0 0 6px rgba(255, 255, 255, 0.05);
+  }
+
+  .cf-chip {
+    @apply inline-flex items-center rounded-[999px] border px-3 py-1 text-xs transition-all duration-200;
+    background: #0b0b0c;
+    border-color: #1c1c1f;
+    color: #ededed;
+  }
+  .cf-chip:hover {
+    background: #151518;
+  }
+
+  .cf-page {
+    animation: cf-fade-in 200ms ease-out both;
+    will-change: opacity, transform;
+  }
+
+  .cf-nav {
+    @apply block rounded-[16px] border px-3 py-2 text-sm transition-all duration-200;
+    background: #111113;
+    border-color: #1c1c1f;
+    color: #ededed;
+  }
+  .cf-nav:hover {
+    background: #151518;
+  }
+
+  .cf-row {
+    @apply rounded-[16px] border px-3 py-2 shadow-[0_1px_0_rgba(255,255,255,0.03)];
+    background: #0b0b0c;
+    border-color: #1c1c1f;
+  }
+
+  /* Dashboard-specific: rounded-xl, p-5, soft border */
+  .cf-card-xl {
+    @apply rounded-xl border p-5 shadow-[0_1px_0_rgba(255,255,255,0.03),0_12px_30px_rgba(0,0,0,0.35)];
+    background: #111113;
+    border-color: #1c1c1f;
+  }
+
+  .cf-skeleton {
+    border-radius: 999px;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.06) 0%,
+      rgba(255, 255, 255, 0.10) 35%,
+      rgba(255, 255, 255, 0.06) 70%
+    );
+    background-size: 200% 100%;
+    animation: cf-shimmer 1.2s ease-in-out infinite;
+  }
 }

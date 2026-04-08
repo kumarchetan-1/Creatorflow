@@ -1,17 +1,21 @@
 import OpenAI from "openai";
 import { supabase } from "@/lib/supabaseClient";
 
-export async function answerQueryFromData(question: string): Promise<string> {
+export async function answerQueryFromData(userId: string, question: string): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("Missing OPENAI_API_KEY.");
   }
+  if (!userId) {
+    throw new Error("Missing userId.");
+  }
 
   const [contactsRes, dealsRes] = await Promise.all([
-    supabase.from("contacts").select("id,name,type"),
+    supabase.from("contacts").select("id,name,type").eq("user_id", userId),
     supabase
       .from("deals")
       .select("id,contact_id,amount,status,created_at,contacts(name)")
+      .eq("user_id", userId)
       .order("created_at", { ascending: false })
   ]);
 

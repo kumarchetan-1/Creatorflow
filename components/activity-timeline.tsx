@@ -1,12 +1,18 @@
-import { getSupabase } from "@/lib/supabase";
 import type { TimelineItem } from "@/types/domain";
+import { createSupabaseServerClient } from "@/lib/supabase/auth-server";
 
 async function getTimeline(): Promise<TimelineItem[]> {
   try {
-    const supabase = getSupabase();
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    if (!user) return [];
+
     const { data } = await supabase
       .from("activities")
       .select("id,action_type,summary,created_at")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(10);
     return data || [];

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Badge, Button, Card, SectionHeader } from "@/components/ui";
 
 type InboxItem = {
   subject: string;
@@ -76,32 +77,49 @@ export default function InboxPage() {
   }, []);
 
   return (
-    <main className="mx-auto w-full max-w-3xl p-4">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <div>
-          <div className="text-lg font-semibold text-zinc-100">Inbox</div>
-          <div className="text-sm text-zinc-400">Brand-related emails only.</div>
-        </div>
-        <Link
-          href="/"
-          className="text-sm text-zinc-300 underline underline-offset-4 hover:text-zinc-100"
-        >
-          Back
-        </Link>
-      </div>
+    <main className="mx-auto w-full max-w-3xl p-6">
+      <SectionHeader
+        title="Inbox"
+        description="Brand-related emails only."
+        right={
+          <Link href="/" className="cf-link text-sm">
+            Back
+          </Link>
+        }
+        className="mb-4"
+      />
 
       {loading ? (
-        <div className="rounded-md border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300">
-          Loading…
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} variant="xl">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="cf-skeleton h-6 w-24 rounded-full" />
+                    <div className="cf-skeleton h-4 w-40 rounded-full" />
+                  </div>
+                  <div className="cf-skeleton h-4 w-[85%] rounded-full" />
+                  <div className="mt-3 space-y-2">
+                    <div className="cf-skeleton h-4 w-[95%] rounded-full" />
+                    <div className="cf-skeleton h-4 w-[75%] rounded-full" />
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center justify-between gap-3 md:flex-col md:items-end">
+                  <div className="cf-skeleton h-9 w-36 rounded-full" />
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
       ) : error ? (
-        <div className="rounded-md border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-200">
-          {error}
-        </div>
+        <Card variant="xl" className="text-sm">
+          Couldn’t load inbox.
+        </Card>
       ) : ordered.length === 0 ? (
-        <div className="rounded-md border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300">
-          No brand-related emails found in the last 10.
-        </div>
+        <Card variant="xl" className="text-sm cf-muted">
+          No brand emails right now.
+        </Card>
       ) : (
         <div className="space-y-3">
           {ordered.map((item) => {
@@ -110,48 +128,48 @@ export default function InboxPage() {
             const isSending = Boolean(sending[key]);
             const status = sentMsg[key] ?? null;
             return (
-              <div
-                key={key}
-                className="rounded-md border border-zinc-800 bg-zinc-950 p-4"
-              >
-                <div className="text-sm font-medium text-zinc-100">{item.subject}</div>
-                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
-                  <div>
-                    <span className="text-zinc-500">Brand:</span>{" "}
-                    <span className="text-zinc-200">{item.brandName || "—"}</span>
-                  </div>
-                  <div className="truncate">
-                    <span className="text-zinc-500">From:</span>{" "}
-                    <span className="text-zinc-200">{item.from || "—"}</span>
-                  </div>
-                </div>
+              <Card key={key} variant="xl">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <Badge>{item.brandName || "—"}</Badge>
+                      <span className="text-xs cf-muted">
+                        {item.from ? `From: ${item.from}` : "From: —"}
+                      </span>
+                    </div>
 
-                <div className="mt-3 text-sm text-zinc-200">{item.summary}</div>
+                    <div className="truncate text-sm font-medium">{item.subject}</div>
+                    <div className="mt-2 text-sm text-[#EDEDED]">{item.summary}</div>
+                  </div>
 
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setOpenReplies((prev) => ({ ...prev, [key]: !prev[key] }))
-                    }
-                    className="rounded-md bg-emerald-500 px-3 py-2 text-sm font-medium text-black hover:bg-emerald-400"
-                  >
-                    {isOpen ? "Hide Reply" : "Generate Reply"}
-                  </button>
+                  <div className="flex shrink-0 items-center justify-between gap-3 md:flex-col md:items-end md:justify-start">
+                    <Button
+                      variant="primary"
+                      type="button"
+                      onClick={() =>
+                        setOpenReplies((prev) => ({ ...prev, [key]: !prev[key] }))
+                      }
+                    >
+                      {isOpen ? "Hide Reply" : "Generate Reply"}
+                    </Button>
+
+                    {status ? <div className="text-sm cf-muted">{status}</div> : null}
+                  </div>
                 </div>
 
                 {isOpen ? (
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-4 space-y-2">
                     <textarea
                       value={drafts[key] ?? ""}
                       onChange={(e) =>
                         setDrafts((prev) => ({ ...prev, [key]: e.target.value }))
                       }
-                      className="min-h-[140px] w-full resize-y rounded-md border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-emerald-500"
+                      className="cf-input min-h-[140px] resize-y p-3 text-sm"
                     />
 
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button
+                        variant="primary"
                         type="button"
                         disabled={isSending}
                         onClick={async () => {
@@ -190,18 +208,13 @@ export default function InboxPage() {
                             setSending((prev) => ({ ...prev, [key]: false }));
                           }
                         }}
-                        className="rounded-md bg-emerald-500 px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
                       >
                         {isSending ? "Sending…" : "Send email"}
-                      </button>
-
-                      {status ? (
-                        <div className="text-sm text-zinc-300">{status}</div>
-                      ) : null}
+                      </Button>
                     </div>
                   </div>
                 ) : null}
-              </div>
+              </Card>
             );
           })}
         </div>

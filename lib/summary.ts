@@ -1,9 +1,11 @@
 import { supabase } from "@/lib/supabaseClient";
 
-export async function getDailySummary(): Promise<string> {
+export async function getDailySummary(userId: string): Promise<string> {
+  if (!userId) throw new Error("Missing userId.");
   const { data: tasks, error: tasksError } = await supabase
     .from("tasks")
     .select("title,due_date,contact_id,contacts(name)")
+    .eq("user_id", userId)
     .eq("status", "pending")
     .order("due_date", { ascending: true });
 
@@ -14,6 +16,7 @@ export async function getDailySummary(): Promise<string> {
   const { count: activeDealsCount, error: dealsError } = await supabase
     .from("deals")
     .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
     .in("status", ["lead", "pitched", "negotiating"]);
 
   if (dealsError) {
