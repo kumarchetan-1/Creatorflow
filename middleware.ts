@@ -5,7 +5,7 @@ export async function middleware(request: NextRequest) {
   const { supabase, response } = createClient(request);
 
   const pathname = request.nextUrl.pathname;
-  const protectedRoutes = ["/chat", "/dashboard", "/inbox"];
+  const protectedRoutes = ["/chat", "/dashboard", "/inbox", "/connections"];
   const isProtected =
     protectedRoutes.includes(pathname) ||
     protectedRoutes.some((p) => p !== "/" && pathname.startsWith(`${p}/`));

@@ -27,6 +27,10 @@ npm run dev
 
 Visit [http://localhost:3000](http://localhost:3000).
 
+### Node version
+
+If you see dev-server chunk errors like `Cannot find module './331.js'`, use **Node 22 LTS** (see `.nvmrc`), or run the dev server with Turbopack via `npm run dev` (default).
+
 ## 4) Test chat commands
 
 Try examples:

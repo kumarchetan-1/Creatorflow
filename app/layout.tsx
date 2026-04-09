@@ -44,6 +44,9 @@ export default function RootLayout({
                 <Link href="/tasks" className="cf-nav">
                   Tasks
                 </Link>
+                <Link href="/connections" className="cf-nav">
+                  Connections
+                </Link>
                 <Link href="/insights" className="cf-nav">
                   Insights
                 </Link>
@@ -62,6 +65,9 @@ export default function RootLayout({
                 <div className="flex items-center gap-3 text-sm">
                   <Link href="/inbox" className="cf-link">
                     Inbox
+                  </Link>
+                  <Link href="/connections" className="cf-link">
+                    Connections
                   </Link>
                   <Link href="/insights" className="cf-link">
                     Insights

@@ -25,7 +25,18 @@ const schema = {
         amount: { type: "number" },
         status: {
           type: "string",
-          enum: ["lead", "pitched", "negotiating", "won", "lost"]
+          enum: [
+            "lead",
+            "pitched",
+            "negotiating",
+            "contract_sent",
+            "contract_signed",
+            "invoice_sent",
+            "paid",
+            "won",
+            "lost",
+            "closed"
+          ]
         },
         dueDate: { type: "string" },
         note: { type: "string" },

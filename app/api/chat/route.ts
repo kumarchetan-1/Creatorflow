@@ -8,6 +8,7 @@ import { handleQuery } from "@/lib/query";
 import { formatQueryResponse } from "@/lib/query-format";
 import { answerQueryFromData } from "@/lib/query-ai";
 import { createSupabaseServerClient } from "@/lib/supabase/auth-server";
+import { upsertInboundItem } from "@/lib/inbound";
 
 function buildSuggestions(input: {
   name?: string | null;
@@ -42,6 +43,48 @@ function extractRelativeDate(text: string): string | null {
   return null;
 }
 
+function parseManualInbound(message: string):
+  | { source: "instagram"; fromHandle: string; body: string }
+  | { source: "upwork"; fromName: string | null; subject: string; body: string }
+  | { source: "form"; fromName: string | null; fromEmail: string | null; subject: string; body: string }
+  | null {
+  const m = message.trim();
+
+  // Examples:
+  // "Log IG DM from @nike: hey we want to collab"
+  // "Log Instagram DM from nike: ..."
+  const ig = m.match(/^\s*log\s+(ig|instagram)\s+dm\s+from\s+(@?[a-z0-9._]+)\s*:\s*([\s\S]+)$/i);
+  if (ig) {
+    const handle = ig[2].startsWith("@") ? ig[2] : `@${ig[2]}`;
+    return { source: "instagram", fromHandle: handle, body: ig[3].trim() };
+  }
+
+  // "Log Upwork from Acme: Project title | message..."
+  const up = m.match(/^\s*log\s+upwork(?:\s+from\s+([^:]+))?\s*:\s*([^|]+)\|\s*([\s\S]+)$/i);
+  if (up) {
+    return {
+      source: "upwork",
+      fromName: (up[1] ?? "").trim() || null,
+      subject: up[2].trim(),
+      body: up[3].trim()
+    };
+  }
+
+  // "Log form from Jane <jane@x.com>: subject | message"
+  const form = m.match(/^\s*log\s+form(?:\s+from\s+([^<:]+)\s*(?:<([^>]+)>)?)?\s*:\s*([^|]+)\|\s*([\s\S]+)$/i);
+  if (form) {
+    return {
+      source: "form",
+      fromName: (form[1] ?? "").trim() || null,
+      fromEmail: (form[2] ?? "").trim() || null,
+      subject: form[3].trim(),
+      body: form[4].trim()
+    };
+  }
+
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const auth = await createSupabaseServerClient();
@@ -60,6 +103,65 @@ export async function POST(req: NextRequest) {
         { error: "Request body must include a non-empty message string." },
         { status: 400 }
       );
+    }
+
+    const manualInbound = parseManualInbound(message);
+    if (manualInbound) {
+      if (manualInbound.source === "instagram") {
+        await upsertInboundItem({
+          userId: user.id,
+          source: "instagram",
+          externalId: null,
+          threadId: null,
+          fromHandle: manualInbound.fromHandle,
+          subject: "Instagram DM",
+          snippet: manualInbound.body.slice(0, 160),
+          body: manualInbound.body,
+          status: "new",
+          metadata: { channel: "instagram" }
+        });
+        return NextResponse.json({
+          reply: `Logged Instagram DM from ${manualInbound.fromHandle}. It’s now in your Inbox.`,
+          suggestions: ["Open Inbox", "Convert to deal", "Set a follow up for tomorrow"]
+        });
+      }
+
+      if (manualInbound.source === "upwork") {
+        await upsertInboundItem({
+          userId: user.id,
+          source: "upwork",
+          externalId: null,
+          threadId: null,
+          fromName: manualInbound.fromName,
+          subject: manualInbound.subject,
+          snippet: manualInbound.body.slice(0, 160),
+          body: manualInbound.body,
+          status: "new",
+          metadata: { channel: "upwork" }
+        });
+        return NextResponse.json({
+          reply: "Logged Upwork lead. It’s now in your Inbox.",
+          suggestions: ["Open Inbox", "Draft a proposal reply", "Convert to deal"]
+        });
+      }
+
+      await upsertInboundItem({
+        userId: user.id,
+        source: "form",
+        externalId: null,
+        threadId: null,
+        fromName: manualInbound.fromName,
+        fromEmail: manualInbound.fromEmail,
+        subject: manualInbound.subject,
+        snippet: manualInbound.body.slice(0, 160),
+        body: manualInbound.body,
+        status: "new",
+        metadata: { channel: "form" }
+      });
+      return NextResponse.json({
+        reply: "Logged inbound form submission. It’s now in your Inbox.",
+        suggestions: ["Open Inbox", "Convert to deal", "Set a follow up for tomorrow"]
+      });
     }
 
     if (isFollowUpQuestion(message)) {
