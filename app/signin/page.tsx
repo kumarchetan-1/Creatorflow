@@ -1,13 +1,20 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/auth-client";
 import { Button, Card, Input, SectionHeader } from "@/components/ui";
 
-export default function SigninPage() {
+function SigninForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath =
+    (() => {
+      const n = searchParams.get("next");
+      if (n?.startsWith("/") && !n.startsWith("//")) return n;
+      return "/chat";
+    })();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,7 +34,7 @@ export default function SigninPage() {
       });
       if (error) throw error;
 
-      router.push("/chat");
+      router.push(nextPath);
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Sign in failed.";
@@ -61,7 +68,7 @@ export default function SigninPage() {
                   const { error } = await supabase.auth.signInWithOAuth({
                     provider: "google",
                     options: {
-                      redirectTo: `${window.location.origin}/auth/callback?next=/chat`
+                      redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`
                     }
                   });
                   if (error) throw error;
@@ -123,6 +130,20 @@ export default function SigninPage() {
         </Card>
       </div>
     </main>
+  );
+}
+
+export default function SigninPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto flex min-h-[calc(100vh-1px)] w-full max-w-md items-center px-6 py-10">
+          <div className="w-full text-sm cf-muted">Loading…</div>
+        </main>
+      }
+    >
+      <SigninForm />
+    </Suspense>
   );
 }
 

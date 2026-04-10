@@ -114,14 +114,11 @@ export default function ConnectionsPage() {
               emails are filtered and summarized in <span className="text-[#EDEDED]">Inbox</span>.
             </div>
             <div className="mt-3 text-xs cf-muted">
-              <span className="text-[#EDEDED]">Local dev:</span> after you approve access, the
-              callback page shows a <span className="text-[#EDEDED]">refresh_token</span> — copy it
-              into <span className="text-[#EDEDED]">GOOGLE_REFRESH_TOKEN</span> in{" "}
-              <span className="text-[#EDEDED]">.env.local</span> and restart the dev server.
-            </div>
-            <div className="mt-2 text-xs cf-muted">
-              <span className="text-[#EDEDED]">Production:</span> token exchange in the callback is
-              disabled by default; wire per-user tokens in the database when you ship.
+              After you approve access, your refresh token is stored securely for your account (table{" "}
+              <span className="text-[#EDEDED]">google_oauth_tokens</span> in Supabase).{" "}
+              <span className="text-[#EDEDED]">Local-only shortcut:</span> you can still set{" "}
+              <span className="text-[#EDEDED]">GOOGLE_REFRESH_TOKEN</span> in{" "}
+              <span className="text-[#EDEDED]">.env.local</span> instead of using Connect Gmail.
             </div>
 
             <div className="mt-4">

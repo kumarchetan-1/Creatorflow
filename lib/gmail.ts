@@ -1,4 +1,5 @@
 import { google, gmail_v1 } from "googleapis";
+import { getGoogleRefreshTokenForUser } from "@/lib/google-oauth-tokens";
 
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -24,25 +25,42 @@ function getOAuth2ClientBase() {
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-export function getGoogleAuthUrl(): string {
+async function resolveRefreshTokenForUser(userId: string): Promise<string | null> {
+  const fromDb = await getGoogleRefreshTokenForUser(userId);
+  if (fromDb) return fromDb;
+  // Single-tenant local dev convenience only — never use shared env tokens in production.
+  if (process.env.NODE_ENV === "production") return null;
+  return process.env.GOOGLE_REFRESH_TOKEN?.trim() || null;
+}
+
+/** True if this user can call Gmail APIs (DB token or dev-only env fallback). */
+export async function userHasGoogleRefreshToken(userId: string): Promise<boolean> {
+  return (await resolveRefreshTokenForUser(userId)) != null;
+}
+
+export function getGoogleAuthUrl(state: string): string {
   const oauth2Client = getOAuth2ClientBase();
 
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: GMAIL_SCOPES
+    scope: GMAIL_SCOPES,
+    state
   });
 }
 
-export function getGmailClient(): gmail_v1.Gmail {
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-  if (!refreshToken) {
-    throw new Error("Missing GOOGLE_REFRESH_TOKEN. Complete OAuth flow to obtain one.");
-  }
-
+export function getGmailClientForRefreshToken(refreshToken: string): gmail_v1.Gmail {
   const auth = getOAuth2ClientBase();
   auth.setCredentials({ refresh_token: refreshToken });
   return google.gmail({ version: "v1", auth });
+}
+
+export async function getGmailClientForUser(userId: string): Promise<gmail_v1.Gmail> {
+  const refreshToken = await resolveRefreshTokenForUser(userId);
+  if (!refreshToken) {
+    throw new Error("Gmail is not connected for this account.");
+  }
+  return getGmailClientForRefreshToken(refreshToken);
 }
 
 function getHeaderValue(
@@ -53,8 +71,8 @@ function getHeaderValue(
   return (value ?? "").trim();
 }
 
-export async function getRecentEmails(): Promise<RecentEmail[]> {
-  const gmail = getGmailClient();
+export async function getRecentEmailsForUser(userId: string): Promise<RecentEmail[]> {
+  const gmail = await getGmailClientForUser(userId);
 
   const listRes = await gmail.users.messages.list({
     userId: "me",
@@ -102,8 +120,13 @@ function base64UrlEncode(input: string): string {
     .replace(/=+$/g, "");
 }
 
-export async function sendEmail(to: string, subject: string, body: string): Promise<string> {
-  const gmail = getGmailClient();
+export async function sendEmailForUser(
+  userId: string,
+  to: string,
+  subject: string,
+  body: string
+): Promise<string> {
+  const gmail = await getGmailClientForUser(userId);
 
   const cleanTo = to.trim();
   const cleanSubject = subject.trim();

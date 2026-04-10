@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/auth-server";
-import { getRecentEmails } from "@/lib/gmail";
+import { getRecentEmailsForUser, userHasGoogleRefreshToken } from "@/lib/gmail";
 
 export async function GET() {
   try {
@@ -13,11 +13,13 @@ export async function GET() {
     const env = {
       hasClientId: Boolean(process.env.GOOGLE_CLIENT_ID),
       hasClientSecret: Boolean(process.env.GOOGLE_CLIENT_SECRET),
-      hasRedirectUri: Boolean(process.env.GOOGLE_REDIRECT_URI),
-      hasRefreshToken: Boolean(process.env.GOOGLE_REFRESH_TOKEN)
+      hasRedirectUri: Boolean(process.env.GOOGLE_REDIRECT_URI)
     };
 
-    if (!env.hasClientId || !env.hasClientSecret || !env.hasRedirectUri || !env.hasRefreshToken) {
+    const envReady = env.hasClientId && env.hasClientSecret && env.hasRedirectUri;
+    const hasToken = await userHasGoogleRefreshToken(user.id);
+
+    if (!envReady) {
       return NextResponse.json({
         ok: true,
         connected: false,
@@ -26,8 +28,17 @@ export async function GET() {
       });
     }
 
+    if (!hasToken) {
+      return NextResponse.json({
+        ok: true,
+        connected: false,
+        env,
+        message: "Gmail not connected. Use Connect Gmail on the Connections page."
+      });
+    }
+
     try {
-      const emails = await getRecentEmails();
+      const emails = await getRecentEmailsForUser(user.id);
       return NextResponse.json({
         ok: true,
         connected: true,
@@ -49,4 +60,3 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
-

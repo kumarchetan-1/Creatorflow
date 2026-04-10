@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server";
-import { getGmailClient } from "@/lib/gmail";
+import { getGmailClientForUser } from "@/lib/gmail";
+import { createSupabaseServerClient } from "@/lib/supabase/auth-server";
 
 export async function GET() {
   try {
-    // Basic sanity check: can we authenticate and call Gmail?
-    const gmail = getGmailClient();
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const gmail = await getGmailClientForUser(user.id);
     const profile = await gmail.users.getProfile({ userId: "me" });
 
     return NextResponse.json({
@@ -19,4 +27,3 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
-

@@ -1,5 +1,18 @@
+import { timingSafeEqual } from "crypto";
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
+import { upsertGoogleRefreshTokenForUser } from "@/lib/google-oauth-tokens";
+import { GOOGLE_OAUTH_STATE_COOKIE } from "@/lib/google-oauth-constants";
+import { createSupabaseServerClient } from "@/lib/supabase/auth-server";
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 function htmlPage(input: { title: string; body: string }) {
   return `<!doctype html>
@@ -29,15 +42,38 @@ function htmlPage(input: { title: string; body: string }) {
 </html>`;
 }
 
+function safeEqualState(a: string, b: string): boolean {
+  const ba = Buffer.from(a, "utf8");
+  const bb = Buffer.from(b, "utf8");
+  if (ba.length !== bb.length) return false;
+  return timingSafeEqual(ba, bb);
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const errorParam = url.searchParams.get("error");
+  const stateParam = url.searchParams.get("state") ?? "";
+
+  const cookieStore = await cookies();
+  const expectedState = cookieStore.get(GOOGLE_OAUTH_STATE_COOKIE)?.value ?? "";
+  cookieStore.delete(GOOGLE_OAUTH_STATE_COOKIE);
 
   if (errorParam) {
     const html = htmlPage({
       title: "Gmail connection cancelled",
-      body: `<p>Google returned <strong>${errorParam}</strong>. This usually means you clicked “Cancel”, your account isn’t allowed (test users / internal app), or an admin policy blocked Gmail scopes.</p>`
+      body: `<p>Google returned <strong>${escapeHtml(errorParam)}</strong>. This usually means you clicked “Cancel”, your account isn’t allowed (test users / internal app), or an admin policy blocked Gmail scopes.</p>`
+    });
+    return new NextResponse(html, {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" }
+    });
+  }
+
+  if (!expectedState || !stateParam || !safeEqualState(expectedState, stateParam)) {
+    const html = htmlPage({
+      title: "Gmail connection failed",
+      body: `<p>Invalid or expired OAuth state. Close this tab and start <strong>Connect Gmail</strong> again from Connections.</p>`
     });
     return new NextResponse(html, {
       status: 200,
@@ -49,6 +85,22 @@ export async function GET(req: NextRequest) {
     const html = htmlPage({
       title: "Gmail connection failed",
       body: `<p>Missing <code>?code=</code> in the callback URL.</p>`
+    });
+    return new NextResponse(html, {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" }
+    });
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    const html = htmlPage({
+      title: "Sign in required",
+      body: `<p>Your session expired during the Google prompt. Sign in to Creatorflow, then try <strong>Connect Gmail</strong> again.</p>`
     });
     return new NextResponse(html, {
       status: 200,
@@ -71,47 +123,49 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Never leak tokens in production logs/responses.
-  if (process.env.NODE_ENV === "production") {
-    const html = htmlPage({
-      title: "Gmail connection requires server-side storage",
-      body: `<p>Token exchange is disabled in production for safety. Store OAuth tokens per user in the database instead of environment variables, then connect Gmail from a secure server flow.</p>`
-    });
-    return new NextResponse(html, {
-      status: 200,
-      headers: { "Content-Type": "text/html; charset=utf-8" }
-    });
-  }
-
   const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+
   try {
     const { tokens } = await oauth2Client.getToken(code);
+    const refreshToken = tokens.refresh_token?.trim();
 
-    const html = htmlPage({
-      title: "Gmail connected (local dev)",
-      body: `<p>Next step: copy the <strong>refresh token</strong> into <code>GOOGLE_REFRESH_TOKEN</code> in <code>.env.local</code>, then restart <code>npm run dev</code>.</p>
-<pre>${JSON.stringify(
-  {
-    refresh_token: tokens.refresh_token ?? null,
-    scope: tokens.scope ?? null,
-    token_type: tokens.token_type ?? null,
-    expiry_date: tokens.expiry_date ?? null
-  },
-  null,
-  2
-)}</pre>
-<p>If <code>refresh_token</code> is <code>null</code>, remove any existing <code>GOOGLE_REFRESH_TOKEN</code> and re-run the flow (Google won’t always re-issue it unless you force consent).</p>`
-    });
+    if (!refreshToken) {
+      const html = htmlPage({
+        title: "Gmail connection incomplete",
+        body: `<p>Google did not return a <code>refresh_token</code>. Revoke Creatorflow’s access in your Google account, then connect again with <strong>prompt=consent</strong> (the app already requests this).</p>`
+      });
+      return new NextResponse(html, {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" }
+      });
+    }
 
-    return new NextResponse(html, {
-      status: 200,
-      headers: { "Content-Type": "text/html; charset=utf-8" }
-    });
+    try {
+      await upsertGoogleRefreshTokenForUser(user.id, refreshToken);
+    } catch (dbErr) {
+      const hint =
+        dbErr instanceof Error && dbErr.message.toLowerCase().includes("relation")
+          ? " Apply the <code>google_oauth_tokens</code> migration in Supabase, then try again."
+          : "";
+      const errText = escapeHtml(dbErr instanceof Error ? dbErr.message : "Database error.");
+      const html = htmlPage({
+        title: "Could not save Gmail connection",
+        body: `<p>${errText}${hint}</p>`
+      });
+      return new NextResponse(html, {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" }
+      });
+    }
+
+    const next = new URL("/connections", req.url);
+    next.searchParams.set("gmail", "connected");
+    return NextResponse.redirect(next);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Token exchange failed.";
     const html = htmlPage({
       title: "Gmail connection failed",
-      body: `<p>${msg}</p>`
+      body: `<p>${escapeHtml(msg)}</p>`
     });
     return new NextResponse(html, {
       status: 200,
@@ -119,4 +173,3 @@ export async function GET(req: NextRequest) {
     });
   }
 }
-

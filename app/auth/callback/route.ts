@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
 
+function safeNextPath(next: string | null): string {
+  if (!next) return "/chat";
+  if (!next.startsWith("/") || next.startsWith("//")) return "/chat";
+  return next;
+}
+
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/chat";
+  const next = safeNextPath(url.searchParams.get("next"));
 
   if (code) {
     const cookieStore = await cookies();

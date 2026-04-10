@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRecentEmails } from "@/lib/gmail";
+import { getRecentEmailsForUser } from "@/lib/gmail";
 import { analyzeEmail, suggestReplyForEmail } from "@/lib/openai";
 import { createSupabaseServerClient } from "@/lib/supabase/auth-server";
 import { listInboundItems, upsertInboundItem } from "@/lib/inbound";
@@ -13,9 +13,9 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     // Gmail is optional; if not configured or denied, we still want the unified inbox to work.
-    let emails: Awaited<ReturnType<typeof getRecentEmails>> = [];
+    let emails: Awaited<ReturnType<typeof getRecentEmailsForUser>> = [];
     try {
-      emails = await getRecentEmails();
+      emails = await getRecentEmailsForUser(user.id);
     } catch {
       emails = [];
     }

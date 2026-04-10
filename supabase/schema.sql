@@ -140,3 +140,14 @@ using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
 alter table contacts add column if not exists type text not null default 'brand';
+
+-- Gmail OAuth (server-only via service role; no client policies)
+create table if not exists google_oauth_tokens (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  refresh_token text not null,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists google_oauth_tokens_updated_at_idx on google_oauth_tokens (updated_at desc);
+
+alter table google_oauth_tokens enable row level security;
