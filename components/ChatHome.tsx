@@ -33,6 +33,7 @@ export default function ChatHome() {
   const [loading, setLoading] = useState(false);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(requestedThreadId);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const inFlightRef = useRef(false);
 
   const view = useMemo(() => {
@@ -46,6 +47,17 @@ export default function ChatHome() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [view.length]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    el.style.height = "0px";
+    const maxHeight = 160;
+    const target = Math.min(el.scrollHeight, maxHeight);
+    el.style.height = `${Math.max(24, target)}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [input]);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,20 +230,21 @@ export default function ChatHome() {
       </div>
 
       <div className="pointer-events-none fixed bottom-0 left-0 right-0 border-t"
-        style={{ borderColor: "#1C1C1F", background: "linear-gradient(to top, rgba(11,11,12,0.98), rgba(11,11,12,0.72), rgba(11,11,12,0))" }}
+        style={{ borderColor: "#2A2A2F", background: "linear-gradient(to top, rgba(11,11,12,0.98), rgba(11,11,12,0.72), rgba(11,11,12,0))" }}
       >
         <div className="pointer-events-auto mx-auto w-full max-w-[700px] px-6 pb-6 pt-4">
           <form
             onSubmit={handleSubmit}
-            className="flex items-end gap-3 overflow-hidden rounded-full border px-5 py-3 shadow-[0_1px_0_rgba(255,255,255,0.03),0_12px_30px_rgba(0,0,0,0.35)]"
-            style={{ background: "#111113", borderColor: "#1C1C1F" }}
+            className="flex items-center gap-3 overflow-hidden rounded-full border px-5 py-3 shadow-[0_1px_0_rgba(255,255,255,0.03),0_12px_30px_rgba(0,0,0,0.35)]"
+            style={{ background: "#111113", borderColor: "#2A2A2F" }}
           >
             <textarea
+              ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Tell me what you want to do..."
               rows={1}
-              className="w-full resize-none bg-transparent text-sm leading-relaxed text-[#EDEDED] outline-none placeholder:text-[#9CA3AF]"
+              className="w-full resize-none bg-transparent py-0 text-sm leading-6 text-[#EDEDED] outline-none placeholder:text-[#9CA3AF]"
               onKeyDown={async (e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
