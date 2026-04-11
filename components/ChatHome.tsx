@@ -13,6 +13,39 @@ type ChatMessage = {
 
 type ViewMessage = ChatMessage & { isTyping?: boolean };
 
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  0: { transcript: string };
+};
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+};
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+function getSpeechRecognitionCtor(): SpeechRecognitionConstructor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as Window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
 function TypingDots() {
   return (
     <div className="flex items-center gap-1">
@@ -31,10 +64,16 @@ export default function ChatHome() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(requestedThreadId);
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const inFlightRef = useRef(false);
+  const latestInputRef = useRef("");
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const speechBaseRef = useRef("");
+  const speechFinalRef = useRef("");
 
   const view = useMemo(() => {
     const base: ViewMessage[] = messages.map((m) => ({ ...m, isTyping: false }));
@@ -58,6 +97,77 @@ export default function ChatHome() {
     el.style.height = `${Math.max(24, target)}px`;
     el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
   }, [input]);
+
+  useEffect(() => {
+    latestInputRef.current = input;
+  }, [input]);
+
+  useEffect(() => {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) {
+      setSpeechSupported(false);
+      return;
+    }
+    setSpeechSupported(true);
+
+    const recognition = new Ctor();
+    recognition.lang = "en-US";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onstart = () => {
+      speechBaseRef.current = latestInputRef.current.trim();
+      speechFinalRef.current = "";
+      setIsListening(true);
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+    recognition.onresult = (event) => {
+      let interimText = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        const transcript = result?.[0]?.transcript?.trim() ?? "";
+        if (!transcript) continue;
+        if (result.isFinal) {
+          speechFinalRef.current = `${speechFinalRef.current} ${transcript}`.trim();
+        } else {
+          interimText = `${interimText} ${transcript}`.trim();
+        }
+      }
+
+      const composed = [speechBaseRef.current, speechFinalRef.current, interimText]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      setInput(composed);
+    };
+
+    speechRecognitionRef.current = recognition;
+    return () => {
+      recognition.onstart = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.onresult = null;
+      recognition.stop();
+      speechRecognitionRef.current = null;
+      setIsListening(false);
+    };
+  }, []);
+
+  function toggleDictation() {
+    const recognition = speechRecognitionRef.current;
+    if (!recognition) return;
+    if (isListening) {
+      recognition.stop();
+      return;
+    }
+    recognition.start();
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -252,6 +362,28 @@ export default function ChatHome() {
                 }
               }}
             />
+            <Button
+              type="button"
+              variant={isListening ? "primary" : "default"}
+              disabled={!speechSupported || loading}
+              className="h-11 w-11 shrink-0 rounded-full p-0"
+              aria-label={isListening ? "Stop dictation" : "Start dictation"}
+              title={
+                !speechSupported
+                  ? "Dictation is not supported in this browser"
+                  : isListening
+                    ? "Stop dictation"
+                    : "Start dictation"
+              }
+              onClick={toggleDictation}
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="9" y="2.5" width="6" height="11" rx="3" />
+                <path d="M5 10.5a7 7 0 0 0 14 0" />
+                <path d="M12 17.5v4" />
+                <path d="M8.5 21.5h7" />
+              </svg>
+            </Button>
             <Button
               type="submit"
               variant="primary"

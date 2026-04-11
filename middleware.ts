@@ -5,12 +5,12 @@ export async function middleware(request: NextRequest) {
   const { supabase, response } = createClient(request);
 
   const pathname = request.nextUrl.pathname;
-  const protectedRoutes = ["/chat", "/dashboard", "/inbox", "/connections"];
-  const isProtected =
-    protectedRoutes.includes(pathname) ||
-    protectedRoutes.some((p) => p !== "/" && pathname.startsWith(`${p}/`));
+  const publicRoutes = ["/signin", "/signup", "/auth/callback"];
+  const isPublic = publicRoutes.includes(pathname);
+  const isApiRoute = pathname.startsWith("/api/");
 
-  if (!isProtected) return response;
+  // Protect all app pages by default; keep auth pages and API routes accessible.
+  if (isPublic || isApiRoute) return response;
 
   const {
     data: { user }
