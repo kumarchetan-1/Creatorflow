@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, SectionHeader } from "@/components/ui";
+import { buildApiUrl } from "@/lib/base-url";
 
 type FollowUp = {
   contact: { id: string; name: string; type: string | null };
@@ -25,7 +26,7 @@ export default function TasksPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("/api/chat", {
+        const res = await fetch(buildApiUrl("/api/chat"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: "Who do I need to follow up with?" })

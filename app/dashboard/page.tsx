@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, SectionHeader } from "@/components/ui";
+import { buildApiUrl } from "@/lib/base-url";
 
 type DailyData = {
   tasks: Array<{
@@ -50,7 +51,7 @@ export default function DashboardPage() {
     setError(null);
     setRefreshing(true);
     try {
-      const res = await fetch("/api/daily?refresh=1", { method: "GET" });
+      const res = await fetch(buildApiUrl("/api/daily?refresh=1"), { method: "GET" });
       const json = (await res.json()) as unknown;
       if (!res.ok) {
         const msg =
@@ -76,7 +77,7 @@ export default function DashboardPage() {
     void (async () => {
       setError(null);
       try {
-        const res = await fetch("/api/daily", { method: "GET" });
+        const res = await fetch(buildApiUrl("/api/daily"), { method: "GET" });
         const json = (await res.json()) as unknown;
         if (!res.ok) {
           const msg =

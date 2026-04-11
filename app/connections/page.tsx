@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, Card, SectionHeader } from "@/components/ui";
+import { buildApiUrl } from "@/lib/base-url";
 
 export default function ConnectionsPage() {
   const [seeding, setSeeding] = useState(false);
@@ -15,7 +16,7 @@ export default function ConnectionsPage() {
   async function loadGmailStatus() {
     setGmailLoading(true);
     try {
-      const res = await fetch("/api/gmail/status");
+      const res = await fetch(buildApiUrl("/api/gmail/status"));
       const json = (await res.json()) as unknown;
       if (!res.ok || (json as { ok?: unknown } | null)?.ok === false) {
         const msg =
@@ -81,7 +82,7 @@ export default function ConnectionsPage() {
                 setSeeding(true);
                 setSeedMsg("");
                 try {
-                  const res = await fetch("/api/inbound/test", { method: "POST" });
+                  const res = await fetch(buildApiUrl("/api/inbound/test"), { method: "POST" });
                   const json = (await res.json()) as unknown;
                   if (!res.ok || (json as { ok?: unknown } | null)?.ok === false) {
                     const msg =
@@ -143,7 +144,7 @@ export default function ConnectionsPage() {
           </div>
           <div className="flex shrink-0 flex-col gap-2 md:items-end">
             <a
-              href="/api/google/auth"
+              href={buildApiUrl("/api/google/auth")}
               className="cf-button-primary w-full px-4 py-2 text-center md:w-auto"
             >
               Connect Gmail

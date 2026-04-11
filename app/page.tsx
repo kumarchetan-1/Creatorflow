@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Button, Card, SectionHeader } from "@/components/ui";
+import { buildApiUrl } from "@/lib/base-url";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -22,9 +24,14 @@ function TypingDots() {
 }
 
 export default function Page() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedThreadId = searchParams.get("thread");
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [currentThreadId, setCurrentThreadId] = useState<string | null>(requestedThreadId);
   const endRef = useRef<HTMLDivElement | null>(null);
   const inFlightRef = useRef(false);
 
@@ -41,6 +48,47 @@ export default function Page() {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [view.length]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadThread(threadId: string) {
+      try {
+        const res = await fetch(buildApiUrl(`/api/chats/${threadId}`), { method: "GET" });
+        const data = (await res.json()) as { messages?: Array<{ role: string; content: string }> };
+        if (!res.ok || !Array.isArray(data.messages)) throw new Error("Failed to load chat thread.");
+        if (!cancelled) {
+          setMessages(
+            data.messages
+              .filter((m) => m.role === "user" || m.role === "assistant")
+              .map((m) => ({
+                role: m.role as "user" | "assistant",
+                text: m.content,
+                suggestions: []
+              }))
+          );
+          setCurrentThreadId(threadId);
+        }
+      } catch {
+        if (!cancelled) {
+          setMessages([]);
+          setCurrentThreadId(threadId);
+        }
+      }
+    }
+
+    if (!requestedThreadId) {
+      setCurrentThreadId(null);
+      setMessages([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void loadThread(requestedThreadId);
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedThreadId]);
+
   async function sendMessage(message: string) {
     const trimmed = message.trim();
     if (!trimmed || inFlightRef.current) return;
@@ -51,10 +99,10 @@ export default function Page() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch(buildApiUrl("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed })
+        body: JSON.stringify({ message: trimmed, threadId: currentThreadId })
       });
 
       const data = (await res.json()) as unknown;
@@ -69,6 +117,14 @@ export default function Page() {
       const suggestions = Array.isArray(suggestionsRaw)
         ? suggestionsRaw.filter((s): s is string => typeof s === "string" && s.trim().length > 0)
         : [];
+      const threadIdFromResponse =
+        typeof (data as { threadId?: unknown } | null)?.threadId === "string"
+          ? ((data as { threadId: string }).threadId as string)
+          : null;
+      if (threadIdFromResponse && threadIdFromResponse !== currentThreadId) {
+        setCurrentThreadId(threadIdFromResponse);
+        router.replace(`/?thread=${threadIdFromResponse}`, { scroll: false });
+      }
 
       setMessages((prev) => [
         ...prev,
@@ -117,7 +173,7 @@ export default function Page() {
                 >
                   <div className="max-w-[85%]">
                     <div
-                      className={`whitespace-pre-line rounded-[20px] border px-4 py-3 text-sm leading-relaxed shadow-[0_1px_0_rgba(255,255,255,0.03)] ${
+                      className={`whitespace-pre-line rounded-[24px] border px-4 py-3 text-sm leading-relaxed shadow-[0_1px_0_rgba(255,255,255,0.03)] ${
                         isAssistant
                           ? "bg-[#111113] text-[#EDEDED] border-[#1C1C1F]"
                           : "bg-[#151518] text-[#EDEDED] border-[#1C1C1F]"
@@ -166,7 +222,7 @@ export default function Page() {
         style={{ borderColor: "#1C1C1F", background: "linear-gradient(to top, rgba(11,11,12,0.98), rgba(11,11,12,0.72), rgba(11,11,12,0))" }}
       >
         <div className="pointer-events-auto mx-auto w-full max-w-[700px] px-6 pb-6 pt-4">
-          <form onSubmit={handleSubmit} className="cf-card-xl flex items-end gap-3 p-4">
+          <form onSubmit={handleSubmit} className="cf-card-xl flex items-end gap-3 rounded-[28px] p-4">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -180,8 +236,21 @@ export default function Page() {
                 }
               }}
             />
-            <Button type="submit" variant="primary" disabled={loading} className="px-4">
-              {loading ? "…" : "Send"}
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={loading}
+              className="h-11 w-11 rounded-full p-0 text-lg"
+              aria-label="Send message"
+            >
+              {loading ? (
+                "…"
+              ) : (
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 2L11 13" />
+                  <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+                </svg>
+              )}
             </Button>
           </form>
           <div className="mt-2 text-xs cf-muted">

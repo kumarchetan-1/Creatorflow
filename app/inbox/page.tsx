@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge, Button, Card, SectionHeader } from "@/components/ui";
+import { buildApiUrl } from "@/lib/base-url";
 
 type InboxItem = {
   id: string;
@@ -53,7 +54,7 @@ export default function InboxPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("/api/inbox", { method: "GET" });
+        const res = await fetch(buildApiUrl("/api/inbox"), { method: "GET" });
         const data = (await res.json()) as unknown;
 
         if (!res.ok) {
@@ -257,7 +258,7 @@ export default function InboxPage() {
                                 : `Re: ${item.subject}`;
                               const body = drafts[key] ?? "";
 
-                              const res = await fetch("/api/send-email", {
+                              const res = await fetch(buildApiUrl("/api/send-email"), {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ to, subject, body })
@@ -311,7 +312,7 @@ export default function InboxPage() {
                           setConverting((prev) => ({ ...prev, [key]: true }));
                           setConvertedMsg((prev) => ({ ...prev, [key]: "" }));
                           try {
-                            const res = await fetch("/api/inbox/convert", {
+                            const res = await fetch(buildApiUrl("/api/inbox/convert"), {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({

@@ -5,6 +5,7 @@ import Link from "next/link";
 import PageTransition from "@/components/PageTransition";
 import { Card } from "@/components/ui/Card";
 import SidebarUser from "@/components/SidebarUser";
+import SidebarNav from "@/components/SidebarNav";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -34,23 +35,7 @@ export default function RootLayout({
             </div>
 
             <nav className="flex-1 px-3">
-              <div className="space-y-1.5">
-                <Link href="/" className="cf-nav">
-                  Chat
-                </Link>
-                <Link href="/inbox" className="cf-nav">
-                  Inbox
-                </Link>
-                <Link href="/tasks" className="cf-nav">
-                  Tasks
-                </Link>
-                <Link href="/connections" className="cf-nav">
-                  Connections
-                </Link>
-                <Link href="/insights" className="cf-nav">
-                  Insights
-                </Link>
-              </div>
+              <SidebarNav />
             </nav>
 
             <div className="p-4">

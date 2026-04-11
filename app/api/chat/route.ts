@@ -9,6 +9,7 @@ import { formatQueryResponse } from "@/lib/query-format";
 import { answerQueryFromData } from "@/lib/query-ai";
 import { createSupabaseServerClient } from "@/lib/supabase/auth-server";
 import { upsertInboundItem } from "@/lib/inbound";
+import { appendChatMessage, createChatThread } from "@/lib/chat-history";
 
 function buildSuggestions(input: {
   name?: string | null;
@@ -105,6 +106,49 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const requestedThreadId =
+      typeof body?.threadId === "string" ? body.threadId.trim() : "";
+    let activeThreadId = requestedThreadId;
+    if (activeThreadId) {
+      const { data: existingThread } = await auth
+        .from("chat_threads")
+        .select("id")
+        .eq("id", activeThreadId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!existingThread) activeThreadId = "";
+    }
+    if (!activeThreadId) {
+      const createdThread = await createChatThread(user.id);
+      activeThreadId = createdThread.id;
+    }
+
+    await appendChatMessage({
+      userId: user.id,
+      threadId: activeThreadId,
+      role: "user",
+      content: message
+    });
+
+    const respond = async (payload: {
+      reply: string;
+      suggestions?: string[];
+      extra?: Record<string, unknown>;
+    }) => {
+      await appendChatMessage({
+        userId: user.id,
+        threadId: activeThreadId,
+        role: "assistant",
+        content: payload.reply
+      });
+      return NextResponse.json({
+        reply: payload.reply,
+        suggestions: payload.suggestions ?? [],
+        threadId: activeThreadId,
+        ...(payload.extra ?? {})
+      });
+    };
+
     const manualInbound = parseManualInbound(message);
     if (manualInbound) {
       if (manualInbound.source === "instagram") {
@@ -120,7 +164,7 @@ export async function POST(req: NextRequest) {
           status: "new",
           metadata: { channel: "instagram" }
         });
-        return NextResponse.json({
+        return await respond({
           reply: `Logged Instagram DM from ${manualInbound.fromHandle}. It’s now in your Inbox.`,
           suggestions: ["Open Inbox", "Convert to deal", "Set a follow up for tomorrow"]
         });
@@ -139,7 +183,7 @@ export async function POST(req: NextRequest) {
           status: "new",
           metadata: { channel: "upwork" }
         });
-        return NextResponse.json({
+        return await respond({
           reply: "Logged Upwork lead. It’s now in your Inbox.",
           suggestions: ["Open Inbox", "Draft a proposal reply", "Convert to deal"]
         });
@@ -158,7 +202,7 @@ export async function POST(req: NextRequest) {
         status: "new",
         metadata: { channel: "form" }
       });
-      return NextResponse.json({
+      return await respond({
         reply: "Logged inbound form submission. It’s now in your Inbox.",
         suggestions: ["Open Inbox", "Convert to deal", "Set a follow up for tomorrow"]
       });
@@ -169,13 +213,13 @@ export async function POST(req: NextRequest) {
       const suggestions = followUps
         .slice(0, 3)
         .map((f) => `Follow up with ${f.contact.name}`);
-      return NextResponse.json({
-        followUps,
+      return await respond({
         reply:
           followUps.length === 0
             ? "You have no pending follow-ups due today or earlier."
             : `You have ${followUps.length} contact(s) to follow up with.`,
-        suggestions
+        suggestions,
+        extra: { followUps }
       });
     }
 
@@ -196,7 +240,7 @@ export async function POST(req: NextRequest) {
         message: extractedMessage ?? message
       });
 
-      return NextResponse.json({
+      return await respond({
         reply,
         suggestions: buildSuggestions({ name, hasAmount: amount != null })
       });
@@ -213,7 +257,7 @@ export async function POST(req: NextRequest) {
 
       await createContact(user.id, name, "brand");
 
-      return NextResponse.json({
+      return await respond({
         reply: `Added ${name} as a brand ✅`,
         suggestions: buildSuggestions({ name })
       });
@@ -229,7 +273,7 @@ export async function POST(req: NextRequest) {
       }
 
       const deal = await createDeal(user.id, name, amount);
-      return NextResponse.json({
+      return await respond({
         reply: `Logged deal with ${deal.name} for ${formatINR(deal.amount)} 💰`,
         suggestions: buildSuggestions({ name: deal.name, hasAmount: true })
       });
@@ -248,7 +292,7 @@ export async function POST(req: NextRequest) {
       }
 
       const task = await createTask(user.id, name, effectiveTitle, effectiveDate);
-      return NextResponse.json({
+      return await respond({
         reply: `Reminder set: ${task.title} with ${task.name} ${task.due_date} ⏰`,
         suggestions: buildSuggestions({ name })
       });
@@ -265,7 +309,7 @@ export async function POST(req: NextRequest) {
 
         const queryResult = await handleQuery(user.id, queryEntities);
         const reply = formatQueryResponse(queryResult.type, queryResult);
-        return NextResponse.json({
+        return await respond({
           reply,
           suggestions: buildSuggestions({
             name: extracted.entities.name ?? null,
@@ -281,14 +325,14 @@ export async function POST(req: NextRequest) {
           queryErrorMessage.includes("Name is required")
         ) {
           const reply = await answerQueryFromData(user.id, message);
-          return NextResponse.json({ reply, suggestions: [] });
+          return await respond({ reply, suggestions: [] });
         }
 
         throw queryError;
       }
     }
 
-    return NextResponse.json({
+    return await respond({
       reply: "Got it. I can add contacts, log deals, and set reminders.",
       suggestions: []
     });
