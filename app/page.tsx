@@ -222,7 +222,11 @@ export default function Page() {
         style={{ borderColor: "#1C1C1F", background: "linear-gradient(to top, rgba(11,11,12,0.98), rgba(11,11,12,0.72), rgba(11,11,12,0))" }}
       >
         <div className="pointer-events-auto mx-auto w-full max-w-[700px] px-6 pb-6 pt-4">
-          <form onSubmit={handleSubmit} className="cf-card-xl flex items-end gap-3 rounded-[28px] p-4">
+          <form
+            onSubmit={handleSubmit}
+            className="flex items-end gap-3 overflow-hidden rounded-full border px-5 py-3 shadow-[0_1px_0_rgba(255,255,255,0.03),0_12px_30px_rgba(0,0,0,0.35)]"
+            style={{ background: "#111113", borderColor: "#1C1C1F" }}
+          >
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -240,7 +244,7 @@ export default function Page() {
               type="submit"
               variant="primary"
               disabled={loading}
-              className="h-11 w-11 rounded-full p-0 text-lg"
+              className="h-11 w-11 shrink-0 rounded-full p-0 text-lg"
               aria-label="Send message"
             >
               {loading ? (
