@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRecentEmailsForUser } from "@/lib/gmail";
+import { getRecentEmailsForUser, getRecentSentRecipientEmailsForUser } from "@/lib/gmail";
 import { analyzeEmail, suggestReplyForEmail } from "@/lib/openai";
 import { createSupabaseServerClient } from "@/lib/supabase/auth-server";
 import { listInboundItems, upsertInboundItem } from "@/lib/inbound";
@@ -53,6 +53,27 @@ function shouldKeepChannelMessage(input: {
   return hasLinkedInSignal || hasUpworkSignal;
 }
 
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function shouldKeepKnownRelationshipMessage(input: {
+  fromName: string | null;
+  fromEmail: string | null;
+  knownEmails: Set<string>;
+  knownNames: Set<string>;
+  knownHandles: Set<string>;
+}): boolean {
+  const fromEmail = normalizeText(input.fromEmail);
+  const fromName = normalizeText(input.fromName);
+  const emailHandle = fromEmail.includes("@") ? fromEmail.split("@")[0] : "";
+
+  if (fromEmail && input.knownEmails.has(fromEmail)) return true;
+  if (fromName && input.knownNames.has(fromName)) return true;
+  if (emailHandle && input.knownHandles.has(emailHandle)) return true;
+  return false;
+}
+
 export async function GET() {
   try {
     const supabase = await createSupabaseServerClient();
@@ -69,6 +90,53 @@ export async function GET() {
       emails = [];
     }
 
+    let sentRecipientEmails: string[] = [];
+    try {
+      sentRecipientEmails = await getRecentSentRecipientEmailsForUser(user.id);
+    } catch {
+      sentRecipientEmails = [];
+    }
+
+    // Build "known relationship" sets: existing contacts + past inbox senders.
+    const [contactsRes, historicalRes] = await Promise.all([
+      supabase
+        .from("contacts")
+        .select("name,email,instagram_handle")
+        .eq("user_id", user.id),
+      supabase
+        .from("inbound_items")
+        .select("from_email,from_name,from_handle")
+        .eq("user_id", user.id)
+        .limit(500)
+    ]);
+
+    const knownEmails = new Set<string>();
+    const knownNames = new Set<string>();
+    const knownHandles = new Set<string>();
+
+    for (const row of contactsRes.data ?? []) {
+      const email = normalizeText(row.email);
+      const name = normalizeText(row.name);
+      const handle = normalizeText(row.instagram_handle);
+      if (email) knownEmails.add(email);
+      if (name) knownNames.add(name);
+      if (handle) knownHandles.add(handle);
+    }
+
+    for (const row of historicalRes.data ?? []) {
+      const email = normalizeText(row.from_email);
+      const name = normalizeText(row.from_name);
+      const handle = normalizeText(row.from_handle);
+      if (email) knownEmails.add(email);
+      if (name) knownNames.add(name);
+      if (handle) knownHandles.add(handle);
+    }
+
+    for (const email of sentRecipientEmails) {
+      const normalized = normalizeText(email);
+      if (normalized) knownEmails.add(normalized);
+    }
+
     const analyzed = await Promise.all(
       emails.map(async (email) => {
         const parsedFrom = parseFromHeader(email.from);
@@ -77,6 +145,13 @@ export async function GET() {
           subject: email.subject,
           snippet: email.snippet,
           fromEmail: parsedFrom.fromEmail
+        });
+        const keepKnownRelationship = shouldKeepKnownRelationshipMessage({
+          fromName: parsedFrom.fromName,
+          fromEmail: parsedFrom.fromEmail,
+          knownEmails,
+          knownNames,
+          knownHandles
         });
 
         let analysis: Awaited<ReturnType<typeof analyzeEmail>> | null = null;
@@ -90,7 +165,12 @@ export async function GET() {
         }
 
         // Keep relevant brand emails, and always keep LinkedIn/Upwork message emails.
-        if (analysis && !keepChannelMessage && (!analysis.isBrandDeal || analysis.intent === "spam")) {
+        if (
+          analysis &&
+          !keepChannelMessage &&
+          !keepKnownRelationship &&
+          (!analysis.isBrandDeal || analysis.intent === "spam")
+        ) {
           return null;
         }
 
@@ -164,8 +244,21 @@ export async function GET() {
               snippet: email.snippet,
               fromEmail: parsedFrom.fromEmail
             });
+            const keepKnownRelationship = shouldKeepKnownRelationshipMessage({
+              fromName: parsedFrom.fromName,
+              fromEmail: parsedFrom.fromEmail,
+              knownEmails,
+              knownNames,
+              knownHandles
+            });
             const analysis = await analyzeEmail({ subject: email.subject, snippet: email.snippet });
-            if (!keepChannelMessage && (!analysis.isBrandDeal || analysis.intent === "spam")) return null;
+            if (
+              !keepChannelMessage &&
+              !keepKnownRelationship &&
+              (!analysis.isBrandDeal || analysis.intent === "spam")
+            ) {
+              return null;
+            }
             const suggestedReply = await suggestReplyForEmail({
               subject: email.subject,
               snippet: email.snippet,

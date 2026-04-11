@@ -112,6 +112,56 @@ export async function getRecentEmailsForUser(userId: string): Promise<RecentEmai
   return detailed;
 }
 
+function parseEmailsFromHeader(value: string): string[] {
+  const raw = (value ?? "").trim();
+  if (!raw) return [];
+
+  const bracketMatches = [...raw.matchAll(/<([^>]+)>/g)]
+    .map((m) => (m[1] ?? "").trim().toLowerCase())
+    .filter(Boolean);
+  if (bracketMatches.length) return bracketMatches;
+
+  return raw
+    .split(",")
+    .map((part) => {
+      const emailMatch = part.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      return emailMatch ? emailMatch[0].trim().toLowerCase() : "";
+    })
+    .filter(Boolean);
+}
+
+export async function getRecentSentRecipientEmailsForUser(userId: string): Promise<string[]> {
+  const gmail = await getGmailClientForUser(userId);
+
+  const listRes = await gmail.users.messages.list({
+    userId: "me",
+    labelIds: ["SENT"],
+    maxResults: 40
+  });
+
+  const messages = listRes.data.messages ?? [];
+  if (!messages.length) return [];
+
+  const recipients = new Set<string>();
+  await Promise.all(
+    messages
+      .map((m) => m.id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0)
+      .map(async (id) => {
+        const msgRes = await gmail.users.messages.get({
+          userId: "me",
+          id,
+          format: "metadata",
+          metadataHeaders: ["To"]
+        });
+        const toHeader = getHeaderValue(msgRes.data.payload?.headers, "To");
+        for (const email of parseEmailsFromHeader(toHeader)) recipients.add(email);
+      })
+  );
+
+  return [...recipients];
+}
+
 function base64UrlEncode(input: string): string {
   return Buffer.from(input, "utf8")
     .toString("base64")
