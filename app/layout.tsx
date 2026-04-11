@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
+import { Suspense } from "react";
 import PageTransition from "@/components/PageTransition";
 import { Card } from "@/components/ui/Card";
 import SidebarUser from "@/components/SidebarUser";
@@ -35,7 +36,9 @@ export default function RootLayout({
             </div>
 
             <nav className="flex-1 px-3">
-              <SidebarNav />
+              <Suspense fallback={<div className="cf-nav">Chat</div>}>
+                <SidebarNav />
+              </Suspense>
             </nav>
 
             <div className="p-4">
