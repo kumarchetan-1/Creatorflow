@@ -66,6 +66,7 @@ export default function ChatHome() {
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(requestedThreadId);
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -104,8 +105,12 @@ export default function ChatHome() {
 
   useEffect(() => {
     const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
+    const isSecure = typeof window !== "undefined" ? window.isSecureContext : true;
+    if (!Ctor || !isSecure) {
       setSpeechSupported(false);
+      if (!isSecure) {
+        setSpeechError("Dictation needs HTTPS (or localhost).");
+      }
       return;
     }
     setSpeechSupported(true);
@@ -117,12 +122,23 @@ export default function ChatHome() {
     recognition.onstart = () => {
       speechBaseRef.current = latestInputRef.current.trim();
       speechFinalRef.current = "";
+      setSpeechError(null);
       setIsListening(true);
     };
     recognition.onend = () => {
       setIsListening(false);
     };
-    recognition.onerror = () => {
+    recognition.onerror = (event) => {
+      const code = event?.error ?? "unknown";
+      if (code === "not-allowed" || code === "service-not-allowed") {
+        setSpeechError("Microphone permission denied.");
+      } else if (code === "no-speech") {
+        setSpeechError("No speech detected. Try again.");
+      } else if (code === "network") {
+        setSpeechError("Network issue while dictating.");
+      } else {
+        setSpeechError("Dictation failed. Try again.");
+      }
       setIsListening(false);
     };
     recognition.onresult = (event) => {
@@ -159,14 +175,24 @@ export default function ChatHome() {
     };
   }, []);
 
-  function toggleDictation() {
+  async function toggleDictation() {
     const recognition = speechRecognitionRef.current;
     if (!recognition) return;
     if (isListening) {
       recognition.stop();
       return;
     }
-    recognition.start();
+    try {
+      setSpeechError(null);
+      if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+      }
+      recognition.start();
+    } catch {
+      setSpeechError("Microphone access blocked. Allow mic permission in your browser.");
+      setIsListening(false);
+    }
   }
 
   useEffect(() => {
@@ -403,6 +429,8 @@ export default function ChatHome() {
           </form>
           <div className="mt-2 text-xs cf-muted">
             Enter to send • Shift+Enter for newline
+            {isListening ? " • Listening..." : ""}
+            {!isListening && speechError ? ` • ${speechError}` : ""}
           </div>
         </div>
       </div>
